@@ -1,23 +1,79 @@
 <script lang="ts">
     import { GoogleGenerativeAI } from "@google/generative-ai";
-    import { story } from "../stores/store";
 
     const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     let isLoading = $state(false);
+    let hasStory = $state(false);
+
+    let story = $state(``);
+    let title: string | null = $state("");
 
     let input = $state("");
 
+    function extractFirstQuotedLineLargeString(text: string) {
+        let startIndex = text.indexOf('"'); // Find the first opening quote
+    
+        if (startIndex === -1) {
+            return null; // No quotes found
+        }
+    
+        startIndex++; // Move past the opening quote
+        let endIndex = text.indexOf('"', startIndex); // Find the next closing quote
+    
+        if (endIndex === -1) {
+            return null; // No closing quote
+        }
+    
+        return text.substring(startIndex, endIndex);
+    }
+
+    function removeFirstQuotedText(text: string) {
+        const startIndex = text.indexOf('"');
+
+        if (startIndex === -1) {
+            return text; // No quotes found, return original string
+        }
+
+        const endIndex = text.indexOf('"', startIndex + 1);
+
+        if (endIndex === -1) {
+            return text; // No matching closing quote, return original string
+        }
+
+        return text.slice(0, startIndex) + text.slice(endIndex + 1);
+}
+
     async function handleSubmit() {
         isLoading = true;
+        
+        let prompt = `create a nonsense, comedic bedtime story that contains these themes: ${input}. Create a title at the start in quotes. Format it in paragraphs, that is, paragraphs should be spaced two lines each. Don't make an intro, jump straight into the story. Make it unique. Use names unique to the story, no cliche names like 'Bartholomew'.`;
 
-        let prompt = `create a nonsense, comedic bedtime story that contains these themes: ${input}`;
+        try {
+            const result = await model.generateContent(prompt);
+            story = removeFirstQuotedText(result.response.text());
 
-        const result = await model.generateContent(prompt);
-        $story = result.response.text();
+        } catch (error) {
+            console.error(error);
+            isLoading = false;
+        } finally {
+            title = extractFirstQuotedLineLargeString(story);
+            isLoading = false;
+            hasStory = true;
+        }
+    }
+
+    function handleBack() {
+        hasStory = false;
     }
 </script>
+
+<svelte:head>
+    <title>Bedtaym</title>
+</svelte:head>
+
+{#if !hasStory}
 
 <section class="flex flex-col items-center mt-16">
 
@@ -38,6 +94,16 @@
     {/if}
 
 </section>
+
+{:else}
+
+<section class="flex flex-col items-center mt-16 mb-16 mx-8">
+    <h1 class="text-3xl text-center">"{title}"</h1>
+    <p class="leading-10 mt-16">{story}</p>
+    <button class="bg-[hsl(225,42%,24%)] hover:bg-[hsl(225,42%,28%)] p-2 rounded-4xl mt-8" onclick={handleBack}>go back</button>
+</section>
+
+{/if}
 
 <style>
     .loader {
